@@ -7,176 +7,78 @@ import signal
 import sys
 import os
 import time
-# import json
+import re
+import json
 from bs4 import BeautifulSoup
 
-def inject_html(driver):
-    # Get the current page source
-    current_html = driver.page_source
-
-    # Parse the HTML using BeautifulSoup
-    soup = BeautifulSoup(current_html, 'html.parser')
-
-    # Add content to <head>
-    head_tag = soup.head
-    style_tag = soup.new_tag("style", id="new-content-nps")
-    style_tag.string = """
-                    #nps-popup {
-                    position: fixed;
-                    bottom: 20px;
-                    right: 20px;
-                    background-color: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 0 10px rgba(0,0,0,0.3);
-                    z-index: 1000;
-                    max-width: 300px;
-                    width: 100%;
-                }
-                #nps-scale {
-                    display: flex;
-                    justify-content: space-between;
-                    margin: 20px 0;
-                }
-                .nps-btn {
-                    padding: 8px;
-                    border: 1px solid #ccc;
-                    border-radius: 8px;
-                    background-color: white;
-                    cursor: pointer;
-                    font-size: 12px;
-                }
-                .nps-btn.selected {
-                    background-color: #4285F4;
-                    color: white;
-                }
-                #nps-feedback {
-                    width: 100%;
-                    height: 80px;
-                    margin-bottom: 10px;
-                    font-size: 14px;
-                }
-                #nps-submit {
-                    display: block;
-                    width: 100%;
-                    padding: 10px;
-                    background-color: #4285F4;
-                    color: white;
-                    border: none;
-                    cursor: pointer;
-                }"""
-    head_tag.append(style_tag)
-
-    # Add content to <body>
-    body_tag = soup.body
-    # new_div = soup.new_tag("div", id="new-content-nps")
-    # new_div.string = """
-    # """
-    # body_tag.append(new_div)
-
-    # Add a new <script> section
-    script_tag = soup.new_tag("script")
-    script_tag.string = """
-            function showNPSPopup() {
-            var popupHtml = `
-                <div id="nps-popup">
-                    <h2 style="font-size: 16px; margin-top: 0;">How likely are you to recommend us?</h2>
-                    <div id="nps-scale">
-                        ${[0,1,2,3,4,5,6,7,8,9,10].map(num => 
-                            `<button class="nps-btn" data-score="${num}">${num}</button>`
-                        ).join('')}
-                    </div>
-                    <textarea id="nps-feedback" placeholder="What's the primary reason for your score?"></textarea>
-                    <button id="nps-submit">Submit</button>
-                </div>
-            `;
-            document.body.insertAdjacentHTML('beforeend', popupHtml);
-
-            document.querySelectorAll('.nps-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    document.querySelectorAll('.nps-btn').forEach(b => b.classList.remove('selected'));
-                    this.classList.add('selected');
-                });
-            });
-
-            document.getElementById('nps-submit').addEventListener('click', function() {
-                var selectedBtn = document.querySelector('.nps-btn.selected');
-                var score = selectedBtn ? selectedBtn.dataset.score : undefined;
-                var feedback = document.getElementById('nps-feedback').value;
-                if (score !== undefined) {
-                    console.log('NPS Score:', score, 'Feedback:', feedback);
-                    document.getElementById('nps-popup').remove();
-                } else {
-                    alert('Please select a score');
-                }
-            });
-        }
-    """
-    body_tag.append(script_tag)
-
-    # Update the page with the modified HTML
-    modified_html = str(soup)
-    # Clear the current page content
-    driver.execute_script("document.body.innerHTML = '';")
-
-    # Insert the new content
-    driver.execute_script(f"document.documentElement.innerHTML = arguments[0];", modified_html)
-
-def get_nps_feedback(driver):
-    js_code = """
-    function showNPSPopup() {
-        return new Promise((resolve, reject) => {
-            var popupHtml = `
-            
-                <div id="nps-popup" style="
-                    position: fixed;
-                    bottom: 20px;
-                    right: 20px;
-                    background-color: white;
-                    border: 1px solid #ccc;
-                    border-radius: 5px;
-                    padding: 20px;
-                    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-                    z-index: 9999;
-                    max-width: 300px;
-                ">
-                    <h2 style="font-size: 16px; margin-top: 0;">How likely are you to recommend us?</h2>
-                    <div id="nps-scale">
-                        ${[0,1,2,3,4,5,6,7,8,9,10].map(num => 
-                            `<button class="nps-btn" data-score="${num}">${num}</button>`
-                        ).join('')}
-                    </div>
-                    <textarea id="nps-feedback" placeholder="(optionnal) What's the primary reason for your score?"></textarea>
-                    <button id="nps-submit">Submit</button>
-                </div>
-            `;
-            document.body.insertAdjacentHTML('beforeend', popupHtml);
-
-            document.querySelectorAll('.nps-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    document.querySelectorAll('.nps-btn').forEach(b => b.classList.remove('selected'));
-                    this.classList.add('selected');
-                });
-            });
-
-            document.getElementById('nps-submit').addEventListener('click', function() {
-                var selectedBtn = document.querySelector('.nps-btn.selected');
-                var score = selectedBtn ? selectedBtn.dataset.score : undefined;
-                var feedback = document.getElementById('nps-feedback').value;
-                if (score !== undefined) {
-                    document.getElementById('nps-popup').remove();
-                    resolve({score: score, feedback: feedback});
-                } else {
-                    alert('Please select a score');
-                }
-            });
-        });
-    }
-    return showNPSPopup();
-    """
+# def inject_html(driver,html_startup_file_path):
+#     # Get the current page source
+#     current_html = driver.page_source
     
+#     html_content =  BeautifulSoup(html_startup_file_path, 'html.parser')
+
+#     # Parse the HTML using BeautifulSoup
+#     target_content = BeautifulSoup(current_html, 'html.parser')
+
+#     # Add content to <head>
+#     head_tag = target_content.head
+#     style_tag = target_content.new_tag("style", id="new-content-nps")
+#     style_tag.string = html_content.head
+#     head_tag.append(style_tag)
+
+#     # Add content to <body>
+#     body_tag = target_content.body
+#     # new_div = target_content.new_tag("div", id="new-content-nps")
+#     # new_div.string = """
+#     # """
+#     # body_tag.append(new_div)
+
+#     # Add a new <script> section
+#     script_tag = target_content.new_tag("script")
+#     script_tag.string = 
+#     body_tag.append(script_tag)
+
+#     # Update the page with the modified HTML
+#     modified_html = str(target_content)
+#     # Clear the current page content
+#     driver.execute_script("document.body.innerHTML = '';")
+
+#     # Insert the new content
+#     driver.execute_script(f"document.documentElement.innerHTML = arguments[0];", modified_html)
+
+def load_js_file(file_path):
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            js_content = file.read()
+            
+        # Remove leading/trailing whitespace from each line and join
+        js_content = '\n'.join(line.strip() for line in js_content.splitlines())
+        
+        # Optional: Remove empty lines
+        js_content = re.sub(r'\n\s*\n', '\n', js_content)
+        
+        return js_content
+    except FileNotFoundError:
+        print(f"Error: JavaScript file not found at {file_path}")
+        return None
+    except IOError:
+        print(f"Error: Unable to read JavaScript file at {file_path}")
+        return None
+    
+def get_nps_feedback(driver,popup_js_filepath):
+    
+    abs_file_path = os.path.abspath(popup_js_filepath)
+    js_code = load_js_file(abs_file_path)
+    logs = driver.get_log('browser')
+    for entry in logs:
+        print(entry)
+     
     # Execute the JavaScript and wait for the result
-    result = driver.execute_script(js_code)
+    try:
+        result = driver.execute_script(js_code)
+        # result = driver.execute_script("showNPSPopup();")
+    except Exception as e:
+        print(f"Could not show the pop up. An error occurred: {e}")
     
     # Extract score and feedback from the result
     score = result.get('score')
@@ -211,36 +113,28 @@ def signal_handler(signum, frame):
         driver.quit()
         sys.exit(0)
 
-def text_form(driver, timeout=3600):
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Translator URL Input Form</title>
-        <script>
-        function submitForm() {
-            var input = document.getElementById('user-input').value;
-            if (input.trim() !== '') {
-                document.getElementById('result').textContent = 'Thank you!';
-                document.getElementById('submit-status').value = 'submitted';
-            } else {
-                alert('Please enter some text before submitting.');
-            }
-        }
-        </script>
-    </head>
-    <body>
-        <h2>Enter your PK:</h2>
-        <textarea id="user-input" rows="4" cols="50"></textarea><br><br>
-        <button onclick="submitForm()">Submit</button>
-        <p id="result"></p>
-        <input type="hidden" id="submit-status">
-    </body>
-    </html>
-    """
 
-    # Load the HTML into the browser
-    driver.get("data:text/html;charset=utf-8," + html)
+def load_html_file(driver, file_path):
+    # Get the absolute path of the HTML file
+    abs_file_path = os.path.abspath(file_path)
+    
+    # Create a file URL
+    file_url = f"file://{abs_file_path}"
+    
+    # Load the HTML file in the browser
+    driver.get(file_url)
+    
+    # Wait for the body to be present to ensure the page has loaded
+    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+
+
+def text_form(driver, html_startup_file_path, timeout=3600):
+
+    try:
+        # Load the HTML file
+        load_html_file(driver, html_startup_file_path)
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
     try:
         # Wait for the form to be submitted
@@ -255,71 +149,19 @@ def text_form(driver, timeout=3600):
     except TimeoutException:
         print(f"Form was not submitted within {timeout} seconds.")
         return None
+    
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
         
 
-    return """
-    function createPopupSurvey() {
-        // Remove existing survey if it exists
-        var existingSurvey = document.getElementById('surveyPopup');
-        if (existingSurvey) {
-            existingSurvey.remove();
-        }
-
-        var surveyDiv = document.createElement('div');
-        surveyDiv.id = 'surveyPopup';
-        surveyDiv.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            z-index: 1000;
-            max-width: 400px;
-            width: 100%;
-        `;
-        surveyDiv.innerHTML = `
-            <h2>Feedback Survey</h2>
-            <p>How would you rate this result?</p>
-            <div id="ratingContainer">
-                <button class="ratingBtn" data-rating="1">1</button>
-                <button class="ratingBtn" data-rating="2">2</button>
-                <button class="ratingBtn" data-rating="3">3</button>
-                <button class="ratingBtn" data-rating="4">4</button>
-                <button class="ratingBtn" data-rating="5">5</button>
-            </div>
-            <textarea id="feedbackText" placeholder="Additional comments (optional)"></textarea>
-            <button id="submitFeedback">Submit</button>
-            <button id="closeSurvey">Close</button>
-        `;
-        document.body.appendChild(surveyDiv);
-
-        document.querySelectorAll('.ratingBtn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                document.querySelectorAll('.ratingBtn').forEach(b => b.style.backgroundColor = 'white');
-                this.style.backgroundColor = '#4285F4';
-                this.style.color = 'white';
-            });
-        });
-
-        document.getElementById('submitFeedback').addEventListener('click', function() {
-            var rating = document.querySelector('.ratingBtn[style*="background-color: rgb(66, 133, 244)"]')?.dataset.rating;
-            var feedback = document.getElementById('feedbackText').value;
-            console.log('Rating:', rating, 'Feedback:', feedback);
-            // Here you would typically send this data to your server
-            alert('Thank you for your feedback!');
-            document.getElementById('surveyPopup').remove();
-        });
-
-        document.getElementById('closeSurvey').addEventListener('click', function() {
-            document.getElementById('surveyPopup').remove();
-        });
-    }
-    """
-
 if __name__ == "__main__":
+    
+    # Load json file template:
+    with open('asset_template.json', 'r') as f:
+        json_template = json.load(f)
+    
+    
     signal.signal(signal.SIGINT, signal_handler)  # Register Ctrl+Z handler
     
     # Set up the WebDriver with JavaScript support
@@ -328,12 +170,14 @@ if __name__ == "__main__":
     chrome_options.add_argument("--start-fullscreen")
     chrome_options.add_argument('--ignore-ssl-errors=yes')
     chrome_options.add_argument('--ignore-certificate-errors')
+    chrome_options.add_argument("--disable-search-engine-choice-screen")
     driver = webdriver.Chrome(options=chrome_options)
 
-
-
     # Get query URL and navigate to it:
-    Translator_results_url = text_form(driver, timeout=3600)
+    Translator_results_url = None
+    while Translator_results_url is None:
+        Translator_results_url = text_form(driver, 'start_up.html', timeout=3600)
+        
     try:
         driver.get(Translator_results_url)
     except Exception as e:
@@ -345,23 +189,52 @@ if __name__ == "__main__":
     try:
         results_in = WebDriverWait(driver, 300).until(EC.presence_of_element_located((By.XPATH, results_xpath)))
         print("Results are in.")
+        # query_elements = WebDriverWait(driver, 300).until(EC.presence_of_all_elements_located((By.XPATH, "//*[contains(@class, 'resultsHeader')]//h6")))
+        # if "What drugs may treat conditions related to" in query_elements[0].text:
+        #     json_template[""]
     except TimeoutException:
         results_in = None
         print("Timed out waiting for results to come in.")
 
     if results_in is not None:
         
-        # add_html_notification_to_button(driver,'general_rating_pop_up.html', 300 ,class_type)
-        try:
-            panel = WebDriverWait(driver, 3600).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, '_accordionPanel_') and contains(@class, '_open')]")))
-            # inject_html(driver)
-            score, feedback = get_nps_feedback(driver)
-            print("found")
-        except TimeoutException:
-            print("not found")
-            
-        # Wait for the Escape key to be pressed
         escape_pressed = EscapePressed()
+        
+        while not escape_pressed.escape_pressed:
+            try:
+                button = WebDriverWait(driver, 300).until(EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, '_accordionButton_') and contains(@class, '_open_')]")))
+                data_result_name = button.get_attribute('data-result-name')
+                score, feedback = get_nps_feedback(driver,'NPSpopup_1_general.js')
+                
+                parent = button.find_element(By.XPATH, "./..")
+                # children = parent.find_elements(By.XPATH, ".//*[contains(@class, '_tableItem_1maym_13')]")
+                children = WebDriverWait(driver, 300).until(EC.presence_of_element_located((By.XPATH, ".//*[contains(@class, '_tableItem_1maym_13')]")))
+                name_container = WebDriverWait(children, 10).until(EC.presence_of_element_located((By.XPATH, ".//*[contains(@class, '_nameContainer_1e6to_9')]")))
+                tooltip_element = WebDriverWait(name_container, 300).until( EC.presence_of_element_located((By.XPATH, ".//*[@data-tooltip-id]")))
+                subject = tooltip_element.get_attribute("data-tooltip-id")
+
+                
+            # TO DO:
+            # For each accordion button : 
+            #     get the parent class P
+            #     get all child of P that is of class="_tableItem_1maym_13"
+            #     SUBJECT =  first item of class=" _nameContainer_1e6to_9" and extract "data-tootip-id" text
+            #     Predicate =  first item of class=" _pathContainer_1e6to_9", get the child of class="_pathLabel_1rdsx_37"
+            #     OBJECT =  third item of class=" _nameContainer_1e6to_9" and extract "data-tootip-id" text
+                
+                
+            except TimeoutException:
+                print("score and feedback not recorded.")
+                
+            print(score)
+            
+            escape_pressed = EscapePressed()
+        
+        
         WebDriverWait(driver, 3600).until(escape_pressed)  # Wait up to 1 hour
+        
+        
+        
+
 
 

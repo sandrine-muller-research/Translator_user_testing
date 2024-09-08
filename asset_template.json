@@ -1,0 +1,49 @@
+{
+    "id": "", 
+    "name": "",
+    "description": "",
+    "tags": [],
+    "test_runner_settings": [
+        "inferred"
+    ],
+    "input_id": "",
+    "input_name": "",
+    "input_category": "",
+    "predicate_id": "",
+    "predicate_name": "",
+    "output_id": "",
+    "output_name": "",
+    "output_category": "",
+    "association": null,
+    "qualifiers": [
+        {
+            "parameter": "",
+            "value": ""
+        },
+        {
+            "parameter": "",
+            "value": ""
+        },
+        {
+            "parameter": "",
+            "value": ""
+        }
+    ],
+    "expected_output": "",
+    "test_issue": null,
+    "semantic_severity": null,
+    "in_v1": null,
+    "well_known": false,
+    "test_reference": null,
+    "test_metadata": {
+        "id": "",
+        "name": null,
+        "description": null,
+        "tags": [],
+        "test_runner_settings": [],
+        "test_source": "",
+        "test_reference": "user automated testing",
+        "test_objective": "AcceptanceTest",
+        "test_annotations": []
+    }
+}
