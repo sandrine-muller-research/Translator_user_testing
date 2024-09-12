@@ -10,6 +10,8 @@ import time
 import re
 import json
 from bs4 import BeautifulSoup
+import copy
+import requests
 
 # def inject_html(driver,html_startup_file_path):
 #     # Get the current page source
@@ -46,6 +48,46 @@ from bs4 import BeautifulSoup
 #     # Insert the new content
 #     driver.execute_script(f"document.documentElement.innerHTML = arguments[0];", modified_html)
 
+def get_github_files(owner, repo, path):
+    # GitHub API endpoint for getting contents of a repository
+    api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+    
+    # Send a GET request to the GitHub API
+    response = requests.get(api_url)
+    
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Parse the JSON response
+        contents = json.loads(response.text)
+        
+        # Extract file names
+        file_names = [item['name'] for item in contents if item['type'] == 'file']
+        
+        return file_names
+    else:
+        print(f"Error: Unable to fetch repository contents. Status code: {response.status_code}")
+        return None
+
+def extract_statement_from_result_container(result_container):
+
+    result_paths = result_container.find_element(By.XPATH, ".//*[contains(@class, '_pathView_')]")
+    children = result_paths.find_elements(By.XPATH, "./*")
+    formatted_paths = children[1].find_elements(By.XPATH, "./*")
+    if len(children) == 4:
+        statement_direct = formatted_paths[1].find_element(By.XPATH, ".//*[contains(@class, '_tableItem_')]").text.replace("\n"," ")
+        # for the inferred part, we are currently choosing to remove the support edges 
+        top_path_inferred_elements = formatted_paths[3].find_element(By.XPATH, ".//*[contains(@class, '_tableItem_')]").find_elements(By.XPATH, "./*")
+        statement_indirect = ""
+        statement_triple = []
+        for top_path_inferred_element in top_path_inferred_elements:
+            if 'rah-static' not in top_path_inferred_element.get_attribute("class"):
+                statement_triple.append(top_path_inferred_element.text)
+        statement_indirect = " ".join(statement_triple)
+                
+    return statement_direct,statement_indirect,statement_triple
+
+
+
 def load_js_file(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
@@ -81,8 +123,11 @@ def get_nps_feedback(driver,popup_js_filepath):
         print(f"Could not show the pop up. An error occurred: {e}")
     
     # Extract score and feedback from the result
-    score = result.get('score')
-    feedback = result.get('feedback')
+    if result is not None:
+        score = result.get('score')
+        feedback = result.get('feedback')
+    else:
+        return None, None
     
     return score, feedback
 
@@ -138,9 +183,7 @@ def text_form(driver, html_startup_file_path, timeout=3600):
 
     try:
         # Wait for the form to be submitted
-        WebDriverWait(driver, timeout).until(
-            EC.text_to_be_present_in_element_value((By.ID, "submit-status"), "submitted")
-        )
+        WebDriverWait(driver, timeout).until(EC.text_to_be_present_in_element_value((By.ID, "submit-status"), "submitted"))
 
         # Get the user input
         user_input = driver.find_element(By.ID, "user-input").get_attribute("value")
@@ -189,9 +232,7 @@ if __name__ == "__main__":
     try:
         results_in = WebDriverWait(driver, 300).until(EC.presence_of_element_located((By.XPATH, results_xpath)))
         print("Results are in.")
-        # query_elements = WebDriverWait(driver, 300).until(EC.presence_of_all_elements_located((By.XPATH, "//*[contains(@class, 'resultsHeader')]//h6")))
-        # if "What drugs may treat conditions related to" in query_elements[0].text:
-        #     json_template[""]
+
     except TimeoutException:
         results_in = None
         print("Timed out waiting for results to come in.")
@@ -199,34 +240,98 @@ if __name__ == "__main__":
     if results_in is not None:
         
         escape_pressed = EscapePressed()
+        user_test_rating_list = []
+        
+        # get last asset id:
+        files_list = get_github_files("NCATSTranslator", "Tests", "test_assets")
+        files_list = [f for f in files_list if "README" not in f]
+        files_list = [f for f in files_list if ".tsv" not in f]
+        asset_id_list = [int(i.replace('Asset_',"").replace('.json',"")) for i in files_list]
+        cpt = 0
         
         while not escape_pressed.escape_pressed:
             try:
                 button = WebDriverWait(driver, 300).until(EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, '_accordionButton_') and contains(@class, '_open_')]")))
-                data_result_name = button.get_attribute('data-result-name')
-                score, feedback = get_nps_feedback(driver,'NPSpopup_1_general.js')
+                # data_result_name = button.get_attribute('data-result-name')
+                user_test_rating = copy.deepcopy(json_template)
                 
-                parent = button.find_element(By.XPATH, "./..")
-                # children = parent.find_elements(By.XPATH, ".//*[contains(@class, '_tableItem_1maym_13')]")
-                children = WebDriverWait(driver, 300).until(EC.presence_of_element_located((By.XPATH, ".//*[contains(@class, '_tableItem_1maym_13')]")))
-                name_container = WebDriverWait(children, 10).until(EC.presence_of_element_located((By.XPATH, ".//*[contains(@class, '_nameContainer_1e6to_9')]")))
-                tooltip_element = WebDriverWait(name_container, 300).until( EC.presence_of_element_located((By.XPATH, ".//*[@data-tooltip-id]")))
-                subject = tooltip_element.get_attribute("data-tooltip-id")
+                result_container = button.find_element(By.XPATH, "./..")
+                result_score = result_container.find_element(By.XPATH, ".//*[contains(@class, '_scoreNum_')]").text
+                # statement_direct,statement_indirect,statement_triple = extract_statement_from_result_container(result_container)
 
+                result_paths = result_container.find_element(By.XPATH, ".//*[contains(@class, '_pathView_')]")
+                children = result_paths.find_elements(By.XPATH, "./*")
+                formatted_paths = children[1].find_elements(By.XPATH, "./*")
+                if len(children) == 4:
+                    cpt += 1
+                    statement_direct = formatted_paths[1].find_element(By.XPATH, ".//*[contains(@class, '_tableItem_')]").text.replace("\n"," ")
+                    # for the inferred part, we are currently choosing to remove the support edges 
+                    top_path_inferred_elements = formatted_paths[3].find_element(By.XPATH, ".//*[contains(@class, '_tableItem_')]").find_elements(By.XPATH, "./*")
+                    statement_indirect = ""
+                    statement_triple = []
+                    statement_triple_categories = []
+                    statement_triple_CURIES = []
+                    for top_path_inferred_element in top_path_inferred_elements:
+                        print(top_path_inferred_element.get_attribute("class"))
+                        if 'rah-static' not in top_path_inferred_element.get_attribute("class"):
+                            triple_name = top_path_inferred_element.text
+                            statement_triple.append(triple_name)
+                            if ('nameContainer' in top_path_inferred_element.get_attribute("class")) or ('targetContainer' in top_path_inferred_element.get_attribute("class")):
+                               statement_triple_categories.append(top_path_inferred_element.get_attribute("data-tooltip-id").replace(triple_name, "")) # THIS NEEDS TO BE FURTHER PARSED TO DIFFERENTIATE CATEGORY FROM ENTITY
+                               statement_triple_CURIES.append(top_path_inferred_element.get_attribute("data-tooltip-id").replace(triple_name, ""))
+                            else:
+                                statement_triple_categories.append("--")
+                                statement_triple_CURIES.append("--")
+
+                    statement_indirect_categories = " ".join(statement_triple_categories)
+                    statement_indirect_CURIES = " ".join(statement_triple_CURIES)
+
+                    # fill json:
+                    user_test_rating["id"] = 'Asset_' + str(max(asset_id_list)+cpt)
+                    user_test_rating["input_id"] = statement_triple_CURIES[0]
+                    user_test_rating["input_name"] = statement_triple[0]
+                    user_test_rating["input_category"] = statement_triple_categories[0]
+                    user_test_rating["predicate_id"] = statement_triple[1]
+                    user_test_rating["predicate_name"] = statement_triple_CURIES[1]
+                    user_test_rating["output_id"] = statement_triple_CURIES[2]
+                    user_test_rating["output_name"] = statement_triple[2]
+                    user_test_rating["output_category"] = statement_triple_categories[2]     
                 
-            # TO DO:
-            # For each accordion button : 
-            #     get the parent class P
-            #     get all child of P that is of class="_tableItem_1maym_13"
-            #     SUBJECT =  first item of class=" _nameContainer_1e6to_9" and extract "data-tootip-id" text
-            #     Predicate =  first item of class=" _pathContainer_1e6to_9", get the child of class="_pathLabel_1rdsx_37"
-            #     OBJECT =  third item of class=" _nameContainer_1e6to_9" and extract "data-tootip-id" text
+                score, feedback = get_nps_feedback(driver,'NPSpopup_1_general.js')
+                button.click()
                 
+                if score == 0:      # never show   
+                    user_test_rating["expected_output"] = "NeverShow"       
+                    user_test_rating["name"] = user_test_rating["expected_output"] + statement_direct
+                    user_test_rating["description"] = user_test_rating["name"]
+                    user_test_rating["input_name"] = user_test_rating["name"]
+                    
+                if score == 10:      # Top answer      
+                    user_test_rating["expected_output"] = "TopAnswer"       
+                    user_test_rating["name"] = user_test_rating["expected_output"] + statement_direct
+                    user_test_rating["description"] = user_test_rating["name"]
+                    user_test_rating["input_name"] = user_test_rating["name"]
+
+                user_test_rating_list.append(user_test_rating)
+                
+                file_name = user_test_rating["id"] + ".json"
+                # save asset:
+                script_path = os.path.dirname(os.path.abspath(__file__))
+                results_folder = os.path.join(script_path, "testing results")
+                if not os.path.exists(results_folder):
+                    os.makedirs(results_folder)
+                # Define the file path for "my_file.json"
+                json_file_path = os.path.join(results_folder, file_name)
+
+                # Write the dictionary to "my_file.json"
+                with open(json_file_path, 'w') as json_file:
+                    json.dump(user_test_rating, json_file)
+
+                print(f"File 'my_file.json' has been created in the 'testing results' folder at: {json_file_path}")
                 
             except TimeoutException:
                 print("score and feedback not recorded.")
                 
-            print(score)
             
             escape_pressed = EscapePressed()
         
