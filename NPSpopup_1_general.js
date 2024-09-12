@@ -113,13 +113,30 @@ function showNPSPopup() {
             var selectedBtn = document.querySelector('.nps-btn.selected');
             var score = selectedBtn ? selectedBtn.dataset.score : undefined;
             var feedback = document.getElementById('nps-feedback').value;
+            
             if (score !== undefined) {
-                document.getElementById('nps-popup').remove();
+                // Close the popup window
+                var popup = document.getElementById('nps-popup');
+                if (popup && popup.style) {
+                    popup.style.display = 'none';  // Hide the popup
+                }
+                popup.remove();
                 resolve({score: score, feedback: feedback});
             } else {
                 alert('Please select a score');
             }
         });
+        // document.getElementById('nps-submit').addEventListener('click', function() {
+        //     var selectedBtn = document.querySelector('.nps-btn.selected');
+        //     var score = selectedBtn ? selectedBtn.dataset.score : undefined;
+        //     var feedback = document.getElementById('nps-feedback').value;
+        //     if (score !== undefined) {
+        //         document.getElementById('nps-popup').remove();
+        //         resolve({score: score, feedback: feedback});
+        //     } else {
+        //         alert('Please select a score');
+        //     }
+        // });
     });
 }
 return showNPSPopup();
