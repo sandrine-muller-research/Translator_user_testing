@@ -9,7 +9,7 @@ import os
 import time
 import re
 import json
-from bs4 import BeautifulSoup
+# from bs4 import BeautifulSoup
 import copy
 import requests
 
@@ -327,7 +327,7 @@ if __name__ == "__main__":
                 with open(json_file_path, 'w') as json_file:
                     json.dump(user_test_rating, json_file)
 
-                print(f"File 'my_file.json' has been created in the 'testing results' folder at: {json_file_path}")
+                print(f"File {file_name} has been created in the 'testing results' folder at: {json_file_path}")
                 
             except TimeoutException:
                 print("score and feedback not recorded.")
